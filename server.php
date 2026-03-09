@@ -26,7 +26,10 @@ if (isset($_POST['register'])) {
 
     // Register user if no errors
     if (count($errors) == 0) {
-        $query = "INSERT INTO \"User\" (username, password) VALUES('$username', '$password') RETURNING id";
+        $salt = bin2hex(random_bytes(16));
+        $hashed_password = password_hash($password . $salt, PASSWORD_BCRYPT);
+        
+        $query = "INSERT INTO \"User\" (username, password, salt) VALUES('$username', '$hashed_password', '$salt') RETURNING id";
         $result = pg_query($conn, $query);
         $new_user = pg_fetch_assoc($result);
         
@@ -57,8 +60,12 @@ if (isset($_POST['add_user_full'])) {
     
     if (!empty($username) && !empty($password)) {
         pg_query($conn, "BEGIN");
-        $query = "INSERT INTO \"User\" (username, password) VALUES($1, $2) RETURNING id";
-        $result = pg_query_params($conn, $query, [$username, $password]);
+        
+        $salt = bin2hex(random_bytes(16));
+        $hashed_password = password_hash($password . $salt, PASSWORD_BCRYPT);
+        
+        $query = "INSERT INTO \"User\" (username, password, salt) VALUES($1, $2, $3) RETURNING id";
+        $result = pg_query_params($conn, $query, [$username, $hashed_password, $salt]);
         
         if ($result) {
             $new_user = pg_fetch_assoc($result);
@@ -79,6 +86,7 @@ if (isset($_POST['add_user_full'])) {
             }
             
             pg_query($conn, "COMMIT");
+            logAuditAction($conn, $_SESSION['username'], "Added user: $username");
             $_SESSION['success'] = "User account created successfully";
         } else {
             pg_query($conn, "ROLLBACK");
@@ -106,6 +114,7 @@ if (isset($_POST['delete_user'])) {
         $result = pg_query_params($conn, $query, [$id]);
         
         if ($result) {
+            logAuditAction($conn, $_SESSION['username'], "Deleted user ID: $id");
             $_SESSION['success'] = "User deleted successfully";
         } else {
             $_SESSION['error'] = "Failed to delete user";
@@ -127,10 +136,14 @@ if (isset($_POST['update_user'])) {
     $password = pg_escape_string($conn, $_POST['password']);
     
     if ($id > 0 && !empty($username) && !empty($password)) {
-        $query = "UPDATE \"User\" SET username = $1, password = $2 WHERE id = $3";
-        $result = pg_query_params($conn, $query, [$username, $password, $id]);
+        $salt = bin2hex(random_bytes(16));
+        $hashed_password = password_hash($password . $salt, PASSWORD_BCRYPT);
+        
+        $query = "UPDATE \"User\" SET username = $1, password = $2, salt = $3 WHERE id = $4";
+        $result = pg_query_params($conn, $query, [$username, $hashed_password, $salt, $id]);
         
         if ($result) {
+            logAuditAction($conn, $_SESSION['username'], "Updated user ID: $id");
             $_SESSION['success'] = "Credential updates saved";
         } else {
             $_SESSION['error'] = "Failed to update user details";
@@ -153,11 +166,15 @@ if (isset($_POST['login'])) {
     }
 
     if (count($errors) == 0) {
-        $query = "SELECT * FROM \"User\" WHERE username='$username' AND password='$password'";
+        $query = "SELECT * FROM \"User\" WHERE username='$username'";
         $results = pg_query($conn, $query);
         if (pg_num_rows($results) == 1) {
             $user_data = pg_fetch_assoc($results);
-            $_SESSION['user_id'] = $user_data['id'];
+            
+            // Verify password using the unique salt
+            $salt = $user_data['salt'];
+            if (password_verify($password . $salt, $user_data['password'])) {
+                $_SESSION['user_id'] = $user_data['id'];
             $_SESSION['username'] = $username;
             
             // Get user roles and privileges
@@ -167,8 +184,13 @@ if (isset($_POST['login'])) {
             logAuthAction($conn, $username, 'Successful Login');
             $_SESSION['success'] = "You are now logged in";
             header('location: profile.php');
+            exit();
+            } else {
+                logAuthAction($conn, $username, 'Unsuccessful Login - Wrong Password');
+                array_push($errors, "Wrong username/password combination");
+            }
         } else {
-            logAuthAction($conn, $username, 'Unsuccessful Login');
+            logAuthAction($conn, $username, 'Unsuccessful Login - User Not Found');
             array_push($errors, "Wrong username/password combination");
         }
     }
@@ -188,6 +210,7 @@ if (isset($_POST['assign_role'])) {
         $result = pg_query_params($conn, $query, [$target_user_id, $role_id]);
         
         if ($result) {
+            logAuditAction($conn, $_SESSION['username'], "Assigned role ID: $role_id to user ID: $target_user_id");
             $_SESSION['success'] = "Role assigned successfully";
         } else {
             $_SESSION['error'] = "Failed to assign role: " . pg_last_error($conn);
@@ -212,6 +235,7 @@ if (isset($_POST['remove_role'])) {
         $result = pg_query_params($conn, $query, [$target_user_id, $role_name]);
         
         if ($result) {
+            logAuditAction($conn, $_SESSION['username'], "Removed role: $role_name from user ID: $target_user_id");
             $_SESSION['success'] = "Role removed successfully";
         } else {
             $_SESSION['error'] = "Failed to remove role: " . pg_last_error($conn);
@@ -236,6 +260,7 @@ if (isset($_POST['assign_direct_privilege'])) {
         $result = pg_query_params($conn, $query, [$target_user_id, $privilege_id]);
         
         if ($result) {
+            logAuditAction($conn, $_SESSION['username'], "Assigned privilege ID: $privilege_id to user ID: $target_user_id");
             $_SESSION['success'] = "Individual privilege granted";
         } else {
             $_SESSION['error'] = "Failed to grant privilege";
@@ -260,6 +285,7 @@ if (isset($_POST['remove_direct_privilege'])) {
         $result = pg_query_params($conn, $query, [$target_user_id, $privilege_name]);
         
         if ($result) {
+            logAuditAction($conn, $_SESSION['username'], "Removed privilege: $privilege_name from user ID: $target_user_id");
             $_SESSION['success'] = "Individual privilege removed";
         } else {
             $_SESSION['error'] = "Failed to remove privilege";
@@ -304,6 +330,7 @@ if (isset($_POST['create_role'])) {
             }
             
             pg_query($conn, "COMMIT");
+            logAuditAction($conn, $_SESSION['username'], "Created role: $role_name");
             $_SESSION['success'] = "Role '$role_name' created successfully";
             header('location: roles.php');
             exit();
@@ -347,6 +374,7 @@ if (isset($_POST['update_role_privileges'])) {
         }
         
         pg_query($conn, "COMMIT");
+        logAuditAction($conn, $_SESSION['username'], "Updated privileges for role ID: $role_id");
         $_SESSION['success'] = "Role privileges updated successfully.";
         header("location: edit_role.php?role_id=$role_id");
         exit();

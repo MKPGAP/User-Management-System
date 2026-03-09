@@ -29,6 +29,9 @@
   $user_roles = $_SESSION['roles'] ?? [];
   $user_privs = $_SESSION['privileges'] ?? [];
 
+  // Log view action
+  logAuditAction($conn, $_SESSION['username'], "View Users page");
+
   $query = "SELECT id, username, password FROM \"User\" ORDER BY id ASC";
   $result = pg_query($conn, $query);
 
@@ -78,6 +81,12 @@
                             Add New User
                         </a>
                     <?php endif; ?>
+                    <?php if (in_array('admin', $user_roles)): ?>
+                        <a href="audit_logs.php" class="btn btn-secondary" style="background: #8b5cf6; padding: 10px 20px;">
+                            <svg style="width:20px;height:20px;vertical-align:middle;margin-right:4px" viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6C4.89 2 4 2.9 4 4V20C4 21.11 4.89 22 6 22H18C19.11 22 20 21.11 20 20V8L14 2M16 16V13L19 13V16H16M13 16V13L16 13V16H13Z" /></svg>
+                            Audit Logs
+                        </a>
+                    <?php endif; ?>
                     <a href="profile.php" class="btn btn-info">My Profile</a> 
                     <a href="index.php?logout='1'" class="btn btn-outline">Logout</a>
                 </div>
@@ -121,7 +130,7 @@
                                     </td>
                                     <?php if (in_array('admin', $user_roles)): ?>
                                         <td>
-                                            <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px;"><?php echo htmlspecialchars($row['password']); ?></code>
+                                            <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #94a3b8;">Hidden (Encrypted)</code>
                                         </td>
                                     <?php endif; ?>
                                     <td style="text-align: center;">

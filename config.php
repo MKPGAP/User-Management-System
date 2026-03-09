@@ -82,4 +82,11 @@ function logAuthAction($conn, $username, $action) {
     $query = "INSERT INTO auth_log (username, action, log_date, log_time) VALUES ($1, $2, CURRENT_DATE, CURRENT_TIME)";
     return @pg_query_params($conn, $query, [$username, $action]);
 }
+
+// Function to log audit actions (privilege usage, etc.)
+function logAuditAction($conn, $username, $action) {
+    if (!$conn) return false;
+    $query = "INSERT INTO audit_log (username, action, log_date, log_time) VALUES ($1, $2, CURRENT_DATE, CURRENT_TIME)";
+    return @pg_query_params($conn, $query, [$username, $action]);
+}
 ?>

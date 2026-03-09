@@ -55,6 +55,10 @@
                             <label>Initial Password</label>
                             <input type="text" name="password" placeholder="Set a secure password" required>
                         </div>
+                            <div class="input-group">
+                                <label>Email Address</label>
+                                <input type="email" name="email" placeholder="Enter user email address" required>
+                            </div>
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 12px;">

@@ -35,6 +35,9 @@
       exit();
   }
 
+  // Log view action
+  logAuditAction($conn, $_SESSION['username'], "View Roles page");
+
   $roles = getRolesWithPrivileges($conn);
 ?>
 <!DOCTYPE html>
@@ -60,6 +63,12 @@
                     <a href="index.php" class="btn btn-secondary" style="background: var(--primary-gradient); padding: 10px 20px;">
                         User Register
                     </a>
+                    <?php if (in_array('admin', $user_roles)): ?>
+                        <a href="audit_logs.php" class="btn btn-secondary" style="background: #8b5cf6; padding: 10px 20px;">
+                            <svg style="width:20px;height:20px;vertical-align:middle;margin-right:4px" viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6C4.89 2 4 2.9 4 4V20C4 21.11 4.89 22 6 22H18C19.11 22 20 21.11 20 20V8L14 2M16 16V13L19 13V16H16M13 16V13L16 13V16H13Z" /></svg>
+                            Audit Logs
+                        </a>
+                    <?php endif; ?>
                     <a href="profile.php" class="btn btn-info">My Profile</a> 
                     <a href="roles.php?logout='1'" class="btn btn-outline">Logout</a>
                 </div>

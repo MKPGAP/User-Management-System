@@ -24,10 +24,13 @@
             <div class="input-group">
                 <button type="submit" class="btn" name="login">Login</button>
             </div>
-            <p>
-                Don't have an account? <a href="register.php">Register here</a>
-            </p>
-        </form>
+                <p style="text-align:center; margin-top:10px;">
+                    <a href="forgot_password.php">Forgot Password?</a>
+                </p>
+                <p>
+                    Don't have an account? <a href="register.php">Register here</a>
+                </p>
+
     </div>
 </body>
 </html>
