@@ -75,4 +75,11 @@ function getRolesWithPrivileges($conn) {
 function hasPrivilege($privileges, $privilege_name) {
     return in_array($privilege_name, $privileges);
 }
+
+// Function to log authentication actions
+function logAuthAction($conn, $username, $action) {
+    if (!$conn) return false;
+    $query = "INSERT INTO auth_log (username, action, log_date, log_time) VALUES ($1, $2, CURRENT_DATE, CURRENT_TIME)";
+    return @pg_query_params($conn, $query, [$username, $action]);
+}
 ?>

@@ -46,8 +46,9 @@ if (isset($_POST['register'])) {
 
 // ADD USER (Enhanced)
 if (isset($_POST['add_user_full'])) {
+    $user_roles = $_SESSION['roles'] ?? [];
     $user_privs = $_SESSION['privileges'] ?? [];
-    if (!hasPrivilege($user_privs, 'insert_users')) {
+    if (!in_array('admin', $user_roles) && !hasPrivilege($user_privs, 'manage_roles')) {
         die("Unauthorized access");
     }
     
@@ -134,7 +135,7 @@ if (isset($_POST['update_user'])) {
         } else {
             $_SESSION['error'] = "Failed to update user details";
         }
-        header("location: manage_roles.php?user_id=$id");
+        header("location: edit_user.php?user_id=$id");
         exit();
     }
 }
@@ -163,9 +164,11 @@ if (isset($_POST['login'])) {
             $_SESSION['roles'] = getUserRoles($conn, $user_data['id']);
             $_SESSION['privileges'] = getUserPrivileges($conn, $user_data['id']);
             
+            logAuthAction($conn, $username, 'Successful Login');
             $_SESSION['success'] = "You are now logged in";
             header('location: profile.php');
         } else {
+            logAuthAction($conn, $username, 'Unsuccessful Login');
             array_push($errors, "Wrong username/password combination");
         }
     }
@@ -189,7 +192,7 @@ if (isset($_POST['assign_role'])) {
         } else {
             $_SESSION['error'] = "Failed to assign role: " . pg_last_error($conn);
         }
-        header("location: manage_roles.php?user_id=$target_user_id");
+        header("location: edit_user.php?user_id=$target_user_id");
         exit();
     }
 }
@@ -213,7 +216,7 @@ if (isset($_POST['remove_role'])) {
         } else {
             $_SESSION['error'] = "Failed to remove role: " . pg_last_error($conn);
         }
-        header("location: manage_roles.php?user_id=$target_user_id");
+        header("location: edit_user.php?user_id=$target_user_id");
         exit();
     }
 }
@@ -237,7 +240,7 @@ if (isset($_POST['assign_direct_privilege'])) {
         } else {
             $_SESSION['error'] = "Failed to grant privilege";
         }
-        header("location: manage_roles.php?user_id=$target_user_id");
+        header("location: edit_user.php?user_id=$target_user_id");
         exit();
     }
 }
@@ -261,8 +264,97 @@ if (isset($_POST['remove_direct_privilege'])) {
         } else {
             $_SESSION['error'] = "Failed to remove privilege";
         }
-        header("location: manage_roles.php?user_id=$target_user_id");
+        header("location: edit_user.php?user_id=$target_user_id");
         exit();
     }
 }
+
+// CREATE NEW ROLE
+if (isset($_POST['create_role'])) {
+    $user_roles = $_SESSION['roles'] ?? [];
+    $user_privs = $_SESSION['privileges'] ?? [];
+    if (!in_array('admin', $user_roles) && !hasPrivilege($user_privs, 'manage_roles')) {
+        die("Unauthorized access");
+    }
+
+    $role_name = strtolower(trim(pg_escape_string($conn, $_POST['role_name'])));
+    
+    // Auto-format role name (snake_case)
+    $role_name = str_replace(' ', '_', $role_name);
+
+    if (!empty($role_name)) {
+        pg_query($conn, "BEGIN");
+        
+        // Attempt to insert
+        // Assuming role_name needs to be unique, we insert
+        $query = "INSERT INTO roles (role_name) VALUES($1) RETURNING id";
+        $result = @pg_query_params($conn, $query, [$role_name]);
+        
+        if ($result && pg_num_rows($result) > 0) {
+            $row = pg_fetch_assoc($result);
+            $new_role_id = $row['id'];
+            
+            if (isset($_POST['privilege_ids']) && is_array($_POST['privilege_ids'])) {
+                foreach ($_POST['privilege_ids'] as $priv_id) {
+                    $pid = intval($priv_id);
+                    if ($pid > 0) {
+                        pg_query_params($conn, "INSERT INTO role_privileges (role_id, privilege_id) VALUES($1, $2)", [$new_role_id, $pid]);
+                    }
+                }
+            }
+            
+            pg_query($conn, "COMMIT");
+            $_SESSION['success'] = "Role '$role_name' created successfully";
+            header('location: roles.php');
+            exit();
+        } else {
+            pg_query($conn, "ROLLBACK");
+            $_SESSION['error'] = "Failed to create role. A role with that name may already exist.";
+            header('location: create_role.php');
+            exit();
+        }
+    } else {
+        $_SESSION['error'] = "Role name cannot be empty.";
+        header('location: create_role.php');
+        exit();
+    }
+}
+
+// UPDATE ROLE PRIVILEGES
+if (isset($_POST['update_role_privileges'])) {
+    $user_roles = $_SESSION['roles'] ?? [];
+    $user_privs = $_SESSION['privileges'] ?? [];
+    if (!in_array('admin', $user_roles) && !hasPrivilege($user_privs, 'manage_roles')) {
+        die("Unauthorized access");
+    }
+
+    $role_id = intval($_POST['role_id']);
+    
+    if ($role_id > 0) {
+        pg_query($conn, "BEGIN");
+        
+        // Remove all current privileges for this role
+        pg_query_params($conn, "DELETE FROM role_privileges WHERE role_id = $1", [$role_id]);
+        
+        // Add new privileges
+        if (isset($_POST['privilege_ids']) && is_array($_POST['privilege_ids'])) {
+            foreach ($_POST['privilege_ids'] as $priv_id) {
+                $pid = intval($priv_id);
+                if ($pid > 0) {
+                    pg_query_params($conn, "INSERT INTO role_privileges (role_id, privilege_id) VALUES($1, $2)", [$role_id, $pid]);
+                }
+            }
+        }
+        
+        pg_query($conn, "COMMIT");
+        $_SESSION['success'] = "Role privileges updated successfully.";
+        header("location: edit_role.php?role_id=$role_id");
+        exit();
+    } else {
+        $_SESSION['error'] = "Invalid role ID.";
+        header('location: roles.php');
+        exit();
+    }
+}
+
 ?>

@@ -8,8 +8,15 @@
     exit();
   }
 
+  // Refresh roles and privileges on every load to ensure they are never stale
+  if (isset($_SESSION['user_id'])) {
+      $_SESSION['roles'] = getUserRoles($conn, $_SESSION['user_id']);
+      $_SESSION['privileges'] = getUserPrivileges($conn, $_SESSION['user_id']);
+  }
+
+  $user_roles = $_SESSION['roles'] ?? [];
   $user_privs = $_SESSION['privileges'] ?? [];
-  if (!hasPrivilege($user_privs, 'insert_users')) {
+  if (!in_array('admin', $user_roles) && !hasPrivilege($user_privs, 'manage_roles')) {
       die("Unauthorized access. You do not have permission to add users.");
   }
 

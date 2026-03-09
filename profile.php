@@ -7,6 +7,10 @@
     exit();
   }
   if (isset($_GET['logout'])) {
+      require_once 'config.php';
+      if (isset($_SESSION['username'])) {
+          logAuthAction($conn, $_SESSION['username'], 'Logout');
+      }
   	session_destroy();
   	unset($_SESSION['username']);
   	header("location: login.php");
@@ -62,7 +66,7 @@
                         } else {
                             foreach ($privs as $priv) {
                                 if ($priv === 'manage_roles') {
-                                    echo "<a href='manage_roles.php?user_id=" . $_SESSION['user_id'] . "' class='privilege-item' style='text-decoration: none; cursor: pointer;'>" . htmlspecialchars(ucfirst(str_replace('_', ' ', $priv))) . "</a>";
+                                    echo "<a href='roles.php' class='privilege-item' style='text-decoration: none; cursor: pointer;'>" . htmlspecialchars(ucfirst(str_replace('_', ' ', $priv))) . "</a>";
                                 } else {
                                     echo "<span class='privilege-item'>" . htmlspecialchars(ucfirst(str_replace('_', ' ', $priv))) . "</span>";
                                 }
